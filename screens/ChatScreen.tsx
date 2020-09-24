@@ -1,52 +1,186 @@
-import React, { useState, useCallback, useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { GiftedChat } from "react-native-gifted-chat";
-import { NavigationProps } from "../types";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+} from "react";
+import { StyleSheet, Platform } from "react-native";
+import { GiftedChat, ActionsProps } from "react-native-gifted-chat";
+import { ScreenProps, RootState, Profile } from "../types";
+import {
+  useFirestoreConnect,
+  isLoaded,
+  useFirestore,
+} from "react-redux-firebase";
+import { useSelector } from "react-redux";
+import { ActivityIndicator, IconButton } from "react-native-paper";
+import { Conversation } from "./ConversationsScreen";
+import { useFocusEffect } from "@react-navigation/native";
+import { HeaderBackButton } from "@react-navigation/stack";
+import { View, Text } from "../components/Themed";
+import { CustomActions } from "../components/chat/InputToolbar";
+import { useImageUpload } from "../hooks/useImageUpload";
 
-interface Message {
-  _id: number;
-  text: string;
-  createdAt: Date;
-  user: {
-    _id: number;
-    name: string;
-    avatar: string; // url
-  };
+export interface User {
+  _id: string;
+  name: string;
+  avatar: string;
 }
 
-export default function ChatScreen({ navigation }: NavigationProps) {
-  const [messages, setMessages] = useState<Array<Message>>([]);
+export interface IMessage {
+  _id: string | number;
+  text: string;
+  createdAt: Date | number;
+  user: User;
+  image?: string;
+  video?: string;
+  audio?: string;
+  system?: boolean;
+  sent?: boolean;
+  received?: boolean;
+  pending?: boolean;
+  quickReplies?: QuickReplies;
+}
 
-  useEffect(() => {
-    navigation.setOptions({ title: "First Conv!" });
-    setMessages([
+interface Reply {
+  title: string;
+  value: string;
+  messageId?: any;
+}
+
+interface QuickReplies {
+  type: "radio" | "checkbox";
+  values: Reply[];
+  keepIt?: boolean;
+}
+
+export default function ChatScreen({ route, navigation }: ScreenProps) {
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: (props) => (
+        <HeaderBackButton
+          {...props}
+          onPress={() => {
+            navigation.navigate("Conversations");
+            console.log("should navigate to Conversations");
+          }}
+        />
+      ),
+      headerRight: () => (
+        <IconButton
+          icon="dots-vertical"
+          size={20}
+          onPress={() =>
+            navigation.navigate("ChatSettingsScreen", {
+              conversationId: route.params?.conversationId,
+            })
+          }
+        />
+      ),
+    });
+  }, [navigation]);
+  const firestore = useFirestore();
+  useFirestoreConnect([
+    {
+      collection: "conversations",
+      doc: route.params?.conversationId,
+      subcollections: [{ collection: "messages" }],
+      orderBy: ["createdAt", "asc"],
+      storeAs: "messages",
+    },
+  ]);
+  useFirestoreConnect([
+    {
+      collection: "conversations",
+      doc: route.params?.conversationId,
+    },
+  ]);
+  const messageHistory = useSelector(
+    ({ firestore: { ordered } }: RootState) => ordered.messages
+  );
+  const conversation: Conversation = useSelector(
+    ({ firestore: { data } }: RootState) =>
+      data.conversations && data.conversations[route.params?.conversationId]
+  );
+  console.log(conversation);
+
+  const formattedMessages = messageHistory
+    ? messageHistory.map((message) => ({
+        _id: message.id,
+        text: message.text,
+        createdAt: message.createdAt.toDate(),
+        user: message.user,
+      }))
+    : [];
+  formattedMessages.reverse();
+
+  // TODO: We should use reselect to compose selectors to get a complete User
+  const auth = useSelector((state: RootState) => state.firebase.auth);
+  const profile: Profile = useSelector(
+    (state: RootState) => state.firebase.profile
+  );
+
+  const user: User = {
+    _id: auth.uid,
+    name: profile.username,
+    avatar: "https://placeimg.com/140/140/any",
+  };
+
+  const onSend = (messages: Array<IMessage>) => {
+    console.log(GiftedChat.append(messageHistory, messages));
+    firestore.add(
       {
-        _id: 1,
-        text: "Hello developer",
-        createdAt: new Date(),
-        user: {
-          _id: 2,
-          name: "React Native",
-          avatar: "https://placeimg.com/140/140/any",
-        },
+        collection: "conversations",
+        doc: route.params?.conversationId,
+        subcollections: [{ collection: "messages" }],
       },
-    ]);
-  }, []);
-
-  const onSend = useCallback((messages = []) => {
-    setMessages((previousMessages) =>
-      GiftedChat.append(previousMessages, messages)
+      messages[0] // message user just wrote
     );
-  }, []);
+  };
 
-  return (
+  // the title needs to be updated from here so the settings change are taken into account
+  const LoadTitle = (conversation: any) =>
+    isLoaded(conversation)
+      ? conversation.title
+      : () => <ActivityIndicator animating={true} />;
+
+  useFocusEffect(() => {
+    navigation.setOptions({
+      headerTitle: LoadTitle(conversation),
+    });
+  });
+
+  const [
+    image,
+    uploading,
+    transferred,
+    handlePickImage,
+    handleSendImage,
+  ] = useImageUpload(
+    () => console.log("success"),
+    () => console.log("error sending image"),
+    {
+      url: `shared/${route.params?.conversationId}`,
+      name: Date.now().toString(),
+    },
+    {
+      collection: "conversations",
+    }
+  );
+
+  return !isLoaded(messageHistory) ? (
+    <View centerContent={true}>
+      <ActivityIndicator animating={true} />
+    </View>
+  ) : (
     <View style={styles.container}>
       <GiftedChat
-        messages={messages}
+        messages={formattedMessages}
         onSend={(messages) => onSend(messages)}
-        user={{
-          _id: 1,
-        }}
+        renderActions={(props: ActionsProps) => (
+          <CustomActions onChooseFromLibrary={handlePickImage} />
+        )}
+        user={user}
       />
     </View>
   );

@@ -11,11 +11,15 @@ import {
   BottomTabParamList,
   ConversationsParamList,
   SettingsParamList,
+  ChatParamList,
 } from "../types";
 import ChatScreen from "../screens/ChatScreen";
 import ConversationsHeader, {
   HeaderBarProps,
 } from "../components/ConversationsHeader";
+import ContactSelectionScreen from "../screens/ContactSelectionScreen";
+import { Button, IconButton } from "react-native-paper";
+import ChatSettingsScreen from "../screens/ChatSettingsScreen";
 
 const BottomTab = createBottomTabNavigator<BottomTabParamList>();
 
@@ -29,7 +33,7 @@ export default function BottomTabNavigator() {
     >
       <BottomTab.Screen
         name="Conversations"
-        component={TabOneNavigator}
+        component={ConversationsNavigator}
         options={{
           tabBarIcon: ({ color }) => (
             <TabBarIcon name="ios-code" color={color} />
@@ -38,7 +42,7 @@ export default function BottomTabNavigator() {
       />
       <BottomTab.Screen
         name="Settings"
-        component={TabTwoNavigator}
+        component={SettingsNavigator}
         options={{
           tabBarIcon: ({ color }) => (
             <TabBarIcon name="ios-code" color={color} />
@@ -57,32 +61,40 @@ function TabBarIcon(props: { name: string; color: string }) {
 
 // Each tab has its own navigation stack, you can read more about this pattern here:
 // https://reactnavigation.org/docs/tab-based-navigation#a-stack-navigator-for-each-tab
-const ConversationsStack = createStackNavigator<ConversationsParamList>();
+const ChatStack = createStackNavigator<ChatParamList>();
 
-function TabOneNavigator() {
+export function ChatNavigator() {
   return (
-    <ConversationsStack.Navigator>
-      <ConversationsStack.Screen
-        name={"ConversationsScreen"}
-        component={ConversationsScreen}
-        options={{ headerTitle: "Conversations" }}
+    <ChatStack.Navigator>
+      <ChatStack.Screen
+        name={"Conversations"}
+        component={BottomTabNavigator}
+        options={{ headerShown: false }}
       />
-      <ConversationsStack.Screen
+      <ChatStack.Screen
         name={"ChatScreen"}
         component={ChatScreen}
         options={({ route }) => ({
-          headerTitle: (props: HeaderBarProps) => (
-            <ConversationsHeader title={route.params.name} {...props} />
-          ),
+          headerTitle: route.params.name,
         })}
       />
-    </ConversationsStack.Navigator>
+      <ChatStack.Screen
+        name={"ChatSettingsScreen"}
+        component={ChatSettingsScreen}
+        options={{ headerTitle: "Conversation Settings" }}
+      />
+      <ChatStack.Screen
+        name={"ContactSelection"}
+        component={ContactSelectionScreen}
+        options={{ headerTitle: "Select Contacts" }}
+      />
+    </ChatStack.Navigator>
   );
 }
 
 const SettingsStack = createStackNavigator<SettingsParamList>();
 
-function TabTwoNavigator() {
+export function SettingsNavigator() {
   return (
     <SettingsStack.Navigator>
       <SettingsStack.Screen
@@ -91,5 +103,19 @@ function TabTwoNavigator() {
         options={{ headerTitle: "Settings" }}
       />
     </SettingsStack.Navigator>
+  );
+}
+
+const ConversationsStack = createStackNavigator<ConversationsParamList>();
+
+export function ConversationsNavigator() {
+  return (
+    <ConversationsStack.Navigator>
+      <ConversationsStack.Screen
+        name="ConversationsScreen"
+        component={ConversationsScreen}
+        options={{ headerTitle: "Conversations" }}
+      />
+    </ConversationsStack.Navigator>
   );
 }
